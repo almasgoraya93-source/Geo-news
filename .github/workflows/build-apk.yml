@@ -1,0 +1,108 @@
+name: Build and Release Android APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build & Release Debug APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Verify active Java version
+        run: java -version
+
+      - name: Setup Gradle 9.3.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+
+      - name: Create temporary debug keystore
+        run: |
+          mkdir -p ~/.android
+          keytool -genkey -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+
+      - name: Build debug APK
+        run: gradle :app:assembleDebug --stacktrace --no-daemon
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        id: publish_release
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG_NAME="v1.0.0-build.${{ github.run_number }}.${{ github.run_attempt }}"
+          RELEASE_TITLE="Q Fix AI v1.0.0 (Build ${{ github.run_number }}.${{ github.run_attempt }})"
+          gh release create "$TAG_NAME" \
+            app/build/outputs/apk/debug/app-debug.apk \
+            --title "$RELEASE_TITLE" \
+            --target "${{ github.sha }}" \
+            --notes "Automated verified Android debug APK build for Q Fix AI." \
+            --latest
+
+      - name: Report APK download result
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG_NAME="v1.0.0-build.${{ github.run_number }}.${{ github.run_attempt }}"
+          if [ "${{ steps.publish_release.outcome }}" = "success" ]; then
+            echo "Confirming release via gh release view..."
+            RELEASE_JSON=$(gh release view "$TAG_NAME" --json tagName,title,url,assets)
+            REL_TAG=$(echo "$RELEASE_JSON" | jq -r '.tagName')
+            REL_TITLE=$(echo "$RELEASE_JSON" | jq -r '.title')
+            REL_URL=$(echo "$RELEASE_JSON" | jq -r '.url')
+            APK_NAME=$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name | endswith(".apk")) | .name' | head -n 1)
+
+            echo "Release Tag: $REL_TAG"
+            echo "Release Title: $REL_TITLE"
+            echo "Release Page URL: $REL_URL"
+            echo "APK Asset Filename: $APK_NAME"
+
+            {
+              echo "### 🚀 APK Release Published Successfully"
+              echo ""
+              echo "- **Release Tag:** \`$REL_TAG\`"
+              echo "- **Release Title:** $REL_TITLE"
+              echo "- **Direct Release URL:** [$REL_URL]($REL_URL)"
+              echo "- **APK Asset:** \`$APK_NAME\`"
+              echo ""
+              echo "The APK can be downloaded directly from the **Assets** section of the [Release Page]($REL_URL)."
+              echo ""
+              echo "The normal Actions artifact (\`app-debug-apk\`) is also available as a backup."
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::warning::GitHub Release publishing encountered an issue or was skipped."
+            echo "State: APK build succeeded."
+            echo "State: The Actions artifact named app-debug-apk remains available."
+
+            {
+              echo "### ⚠️ Release Publishing Warning"
+              echo ""
+              echo "> **Warning:** Release publishing did not complete or was skipped."
+              echo ""
+              echo "- **APK Build Result:** The APK build succeeded."
+              echo "- **Backup Artifact:** The Actions artifact named \`app-debug-apk\` remains available for direct download in the Actions run summary."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
