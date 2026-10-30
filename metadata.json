@@ -1,0 +1,10 @@
+{
+  "name": "Q Fix AI - Smartphone Diagnostic & Repair Assistant",
+  "description": "Complete AI-powered Android smartphone diagnostic, live screen analysis, hardware testing, and repair assistant.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "display-capture"
+  ],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
