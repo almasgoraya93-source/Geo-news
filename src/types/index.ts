@@ -1,14 +1,24 @@
 export type AppTab = 'home' | 'reports' | 'live' | 'settings' | 'chat' | 'hardware' | 'software' | 'voice';
 
-export type Language = 'en' | 'ur' | 'hi' | 'ps';
+export type Language = 'en' | 'ur' | 'hi' | 'ps' | 'pa';
 
 export type DeviceHealthCondition = 'Good Condition' | 'Average Condition' | 'Needs Attention';
 
 export interface DeviceInfo {
   manufacturer: string;
   model: string;
+  marketingName?: string;
   androidVersion: string;
   apiLevel: number;
+  osName?: string; // e.g. "HiOS 14 (Tecno)", "One UI 6.1", "HyperOS"
+  buildNumber?: string;
+  processorName?: string; // e.g. "MediaTek Helio G99 (8-Core 2.2 GHz)"
+  gpuRenderer?: string; // e.g. "Mali-G57 MC2"
+  gpuVendor?: string;
+  screenResolution?: string; // e.g. "1080 x 2460 (FHD+)"
+  screenRefreshRate?: number; // e.g. 120 or 90 or 60 Hz
+  maxTouchPoints?: number; // e.g. 10
+  batteryCapacityMah?: number; // e.g. 5000 mAh
   batteryPercentage: number;
   batteryTemperature: number; // in Celsius
   batteryCharging: boolean;
@@ -25,6 +35,7 @@ export interface DeviceInfo {
   networkSpeedMbps: number;
   pingMs: number;
   securityPatch: string;
+  isAutoDetected?: boolean;
 }
 
 export type TestStatus = 'untested' | 'testing' | 'pass' | 'fail' | 'warning' | 'unsupported';

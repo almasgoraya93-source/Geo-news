@@ -27,6 +27,7 @@ import { DiagnosticTestItem } from '../../types/index.ts';
 
 interface HardwareTestScreenProps {
   tests: DiagnosticTestItem[];
+  deviceInfo?: any;
   onBack: () => void;
   onUpdateTestStatus: (id: string, status: 'pass' | 'fail') => void;
   isDark?: boolean;
@@ -75,6 +76,7 @@ function getHardwareIcon(testId: string) {
 
 export const HardwareTestScreen: React.FC<HardwareTestScreenProps> = ({
   tests,
+  deviceInfo,
   onBack,
   onUpdateTestStatus,
   isDark = false
@@ -109,9 +111,14 @@ export const HardwareTestScreen: React.FC<HardwareTestScreenProps> = ({
             <ChevronLeft className="w-6 h-6 stroke-[2]" />
           </button>
 
-          <h2 className="text-base font-bold text-slate-900 dark:text-white">
-            Hardware Test
-          </h2>
+          <div>
+            <h2 className="text-base font-bold text-slate-900 dark:text-white leading-tight">
+              Hardware Test
+            </h2>
+            <span className="text-[10px] text-slate-400 font-medium block">
+              {deviceInfo?.model || '22 Hardware Sensors'}
+            </span>
+          </div>
         </div>
 
         <button

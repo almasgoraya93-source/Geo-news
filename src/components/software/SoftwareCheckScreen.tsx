@@ -19,6 +19,7 @@ import { DiagnosticTestItem } from '../../types/index.ts';
 
 interface SoftwareCheckScreenProps {
   checks: DiagnosticTestItem[];
+  deviceInfo?: any;
   onBack: () => void;
   onRunOptimization: () => void;
   isDark?: boolean;
@@ -58,6 +59,7 @@ function getSoftwareIcon(id: string) {
 
 export const SoftwareCheckScreen: React.FC<SoftwareCheckScreenProps> = ({
   checks,
+  deviceInfo,
   onBack,
   onRunOptimization,
   isDark = false
@@ -88,9 +90,14 @@ export const SoftwareCheckScreen: React.FC<SoftwareCheckScreenProps> = ({
             <ChevronLeft className="w-6 h-6 stroke-[2]" />
           </button>
 
-          <h2 className="text-base font-bold text-slate-900 dark:text-white">
-            Software Check
-          </h2>
+          <div>
+            <h2 className="text-base font-bold text-slate-900 dark:text-white leading-tight">
+              Software Check
+            </h2>
+            <span className="text-[10px] text-slate-400 font-medium block">
+              {deviceInfo?.osName || '16 System Diagnostics'}
+            </span>
+          </div>
         </div>
 
         <button

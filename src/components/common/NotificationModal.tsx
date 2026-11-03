@@ -1,41 +1,57 @@
 import React from 'react';
-import { X, Bell, BatteryCharging, AlertTriangle, ShieldCheck, HardDrive } from 'lucide-react';
+import { X, Bell, BatteryCharging, AlertTriangle, ShieldCheck, HardDrive, Download } from 'lucide-react';
 
 interface NotificationModalProps {
   isOpen: boolean;
   onClose: () => void;
+  deviceInfo?: any;
+  onTriggerAlert?: (alert: any) => void;
   isDark?: boolean;
 }
 
 export const NotificationModal: React.FC<NotificationModalProps> = ({
   isOpen,
   onClose,
+  deviceInfo,
+  onTriggerAlert,
   isDark = false
 }) => {
   if (!isOpen) return null;
 
+  const modelName = deviceInfo?.model || 'Tecno One (Spark 20)';
+  const batteryLevel = deviceInfo?.batteryPercentage ?? 82;
+  const temp = deviceInfo?.batteryTemperature ?? 31.4;
+
   const notifications = [
+    {
+      id: '0',
+      title: '📦 Android APK Ready to Install',
+      time: 'New',
+      desc: `QFixAI-v1.0.0-debug.apk (2.9 MB) is compiled for Android ${deviceInfo?.androidVersion || '14'} devices. Tap below to download.`,
+      icon: Download,
+      color: 'text-purple-600 bg-purple-50 dark:bg-purple-950/60'
+    },
     {
       id: '1',
       title: 'Battery Health Optimal',
-      time: '10 min ago',
-      desc: 'Battery is at 78% capacity with safe operating temperature (31.4°C).',
+      time: 'Just now',
+      desc: `${modelName} battery is at ${batteryLevel}% capacity with safe operating temperature (${temp}°C).`,
       icon: BatteryCharging,
       color: 'text-emerald-500 bg-emerald-50'
     },
     {
       id: '2',
       title: 'Cache Buildup Detected',
-      time: '2 hours ago',
-      desc: 'Temporary app caches have accumulated 3.4 GB. You can safely clear it.',
+      time: '1 hour ago',
+      desc: `Temporary app caches have accumulated 3.2 GB on ${modelName}. Tap to clean.`,
       icon: HardDrive,
       color: 'text-amber-500 bg-amber-50'
     },
     {
       id: '3',
       title: 'Security Definitions Verified',
-      time: 'Yesterday',
-      desc: 'Google Play System update and Android security patch are current.',
+      time: 'Today',
+      desc: `Google Play System update and Android ${deviceInfo?.androidVersion || '14'} security patch are current.`,
       icon: ShieldCheck,
       color: 'text-blue-500 bg-blue-50'
     }
@@ -88,9 +104,37 @@ export const NotificationModal: React.FC<NotificationModalProps> = ({
           })}
         </div>
 
+        {/* Test Live Notification Button */}
+        {onTriggerAlert && (
+          <button
+            onClick={() => {
+              onClose();
+              onTriggerAlert({
+                id: 'test-' + Date.now(),
+                title: '⚡ Live Diagnostic Health Update',
+                message: `${modelName} (Android ${deviceInfo?.androidVersion || '14'}): Battery ${batteryLevel}%, Temperature ${temp}°C, all 22 sensors operating in good condition.`,
+                type: 'battery'
+              });
+            }}
+            className="w-full mt-4 py-2.5 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-sm hover:from-blue-700 hover:to-indigo-700"
+          >
+            <span>🔔 Send Live Test Alert (لائیو ٹیسਟ الرٹ بھیجیں)</span>
+          </button>
+        )}
+
+        {/* Direct APK Download Link */}
+        <a
+          href="/app-debug.apk"
+          download="QFixAI-v1.0.0-debug.apk"
+          className="w-full mt-3 py-2.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-emerald-500/20 hover:from-emerald-700 hover:to-teal-700 transition-all text-center"
+        >
+          <Download className="w-4 h-4 stroke-[2.2]" />
+          <span>📥 Download Android APK (2.9 MB)</span>
+        </a>
+
         <button
           onClick={onClose}
-          className="w-full mt-5 py-3 rounded-2xl bg-blue-600 text-white font-semibold text-xs hover:bg-blue-700 cursor-pointer transition-colors"
+          className="w-full mt-2.5 py-2.5 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-semibold text-xs hover:bg-slate-200 cursor-pointer transition-colors"
         >
           Dismiss All
         </button>

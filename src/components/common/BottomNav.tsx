@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, FileText, Radio, Settings } from 'lucide-react';
+import { Home, MessageSquare, Mic, Settings } from 'lucide-react';
 import { AppTab } from '../../types/index.ts';
 
 interface BottomNavProps {
@@ -20,14 +20,14 @@ export const BottomNav: React.FC<BottomNavProps> = ({
       icon: Home,
     },
     {
-      id: 'reports' as AppTab,
-      label: 'Reports',
-      icon: FileText,
+      id: 'chat' as AppTab,
+      label: 'AI Chat',
+      icon: MessageSquare,
     },
     {
-      id: 'live' as AppTab,
-      label: 'Live',
-      icon: Radio,
+      id: 'voice' as AppTab,
+      label: 'Live Voice',
+      icon: Mic,
       badge: 'LIVE',
     },
     {
@@ -48,8 +48,8 @@ export const BottomNav: React.FC<BottomNavProps> = ({
         const Icon = tab.icon;
         const isActive =
           currentTab === tab.id ||
-          (tab.id === 'home' && ['hardware', 'software'].includes(currentTab)) ||
-          (tab.id === 'live' && ['voice'].includes(currentTab));
+          (tab.id === 'home' && ['hardware', 'software', 'reports'].includes(currentTab)) ||
+          (tab.id === 'voice' && ['live'].includes(currentTab));
 
         return (
           <button

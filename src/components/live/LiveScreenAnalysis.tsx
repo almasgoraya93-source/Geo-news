@@ -19,12 +19,16 @@ import {
 interface LiveScreenAnalysisProps {
   onBack: () => void;
   onOpenSettings: () => void;
+  onOpenNotifications?: () => void;
+  onNavigate?: (tab: any) => void;
   isDark?: boolean;
 }
 
 export const LiveScreenAnalysis: React.FC<LiveScreenAnalysisProps> = ({
   onBack,
   onOpenSettings,
+  onOpenNotifications,
+  onNavigate,
   isDark = false
 }) => {
   const [isSharing, setIsSharing] = useState(false);
@@ -126,20 +130,43 @@ export const LiveScreenAnalysis: React.FC<LiveScreenAnalysisProps> = ({
     setIsAnalyzing(true);
 
     try {
+      // Capture live screen frame if video stream is active
+      let frameImage: string | undefined;
+      if (videoRef.current && stream) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 640;
+        canvas.height = 360;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(videoRef.current, 0, 0, 640, 360);
+          frameImage = canvas.toDataURL('image/jpeg', 0.8);
+        }
+      }
+
       const res = await fetch('/api/analyze-screen', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: q })
+        body: JSON.stringify({ question: q, frameImage })
       });
       const data = await res.json();
+      const answer = data.analysis?.aiAdvice || 'Screen looks healthy.';
       setLiveFindings((prev) => [
         {
           time: formatTimer(timerSec),
-          text: data.analysis?.aiAdvice || 'Screen looks healthy.',
+          text: answer,
           severity: 'low'
         },
         ...prev
       ]);
+
+      // Read out diagnosis aloud if SpeechSynthesis is supported
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const clean = answer.replace(/[#*•_\-`]/g, ' ').replace(/\n+/g, '. ');
+        const utterance = new SpeechSynthesisUtterance(clean.slice(0, 150));
+        utterance.rate = 1.0;
+        window.speechSynthesis.speak(utterance);
+      }
     } catch {
       setLiveFindings((prev) => [
         {
@@ -151,6 +178,36 @@ export const LiveScreenAnalysis: React.FC<LiveScreenAnalysisProps> = ({
       ]);
     } finally {
       setIsAnalyzing(false);
+    }
+  };
+
+  const handleToggleLiveMic = () => {
+    if (isMicActive) {
+      setIsMicActive(false);
+      return;
+    }
+
+    if (typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)) {
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      const rec = new SpeechRecognition();
+      rec.continuous = false;
+      rec.interimResults = false;
+      rec.lang = 'ur-PK';
+
+      setIsMicActive(true);
+      rec.onresult = (e: any) => {
+        const text = e.results[0][0].transcript;
+        setLiveQuestion(text);
+        setIsMicActive(false);
+      };
+      rec.onerror = () => setIsMicActive(false);
+      rec.onend = () => setIsMicActive(false);
+      rec.start();
+    } else {
+      // Toggle state and populate sample
+      setIsMicActive(true);
+      setLiveQuestion('Screen par koi error ya bottleneck hai?');
+      setTimeout(() => setIsMicActive(false), 2000);
     }
   };
 
@@ -176,17 +233,50 @@ export const LiveScreenAnalysis: React.FC<LiveScreenAnalysisProps> = ({
           </h2>
         </div>
 
-        <button
-          onClick={onOpenSettings}
-          aria-label="Screen sharing settings"
-          className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 cursor-pointer"
-        >
-          <Settings className="w-5 h-5 stroke-[1.8]" />
-        </button>
+        <div className="flex items-center gap-1">
+          {onOpenNotifications && (
+            <button
+              onClick={onOpenNotifications}
+              aria-label="Open notifications"
+              className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 cursor-pointer"
+            >
+              <Bell className="w-5 h-5 stroke-[1.8]" />
+            </button>
+          )}
+
+          <button
+            onClick={onOpenSettings}
+            aria-label="Screen sharing settings"
+            className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 cursor-pointer"
+          >
+            <Settings className="w-5 h-5 stroke-[1.8]" />
+          </button>
+        </div>
       </header>
 
+      {/* Screen vs Voice Mode Switcher */}
+      <div className="w-full px-4 pt-2 pb-1 shrink-0">
+        <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+          <button
+            type="button"
+            className="flex-1 py-1.5 text-xs font-bold rounded-lg bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
+          >
+            <ScreenShare className="w-3.5 h-3.5" />
+            <span>Screen Analysis</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onNavigate && onNavigate('voice')}
+            className="flex-1 py-1.5 text-xs font-medium rounded-lg text-slate-500 hover:text-slate-800 dark:hover:text-white flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+          >
+            <Mic className="w-3.5 h-3.5" />
+            <span>Live Voice</span>
+          </button>
+        </div>
+      </div>
+
       {/* Main Content Area */}
-      <div className="flex-1 overflow-y-auto px-5 py-6 flex flex-col items-center">
+      <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col items-center">
         {!isSharing ? (
           /* INACTIVE STATE - EXACT MATCH TO REFERENCE SCREENSHOT 4 */
           <div className="w-full flex flex-col items-center text-center my-auto">
@@ -245,14 +335,23 @@ export const LiveScreenAnalysis: React.FC<LiveScreenAnalysisProps> = ({
                 </span>
               </div>
 
-              <div className="flex items-center gap-3.5">
-                <div className="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 flex items-center justify-center shrink-0">
+              <button
+                type="button"
+                onClick={() => onNavigate && onNavigate('voice')}
+                className="w-full flex items-center gap-3.5 p-1 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left cursor-pointer"
+              >
+                <div className="w-9 h-9 rounded-xl bg-purple-50 dark:bg-purple-950/60 text-purple-600 flex items-center justify-center shrink-0">
                   <Mic className="w-4 h-4 stroke-[2]" />
                 </div>
-                <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-                  Talk or type with AI
-                </span>
-              </div>
+                <div className="flex-1">
+                  <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 block">
+                    Talk or type with AI
+                  </span>
+                  <span className="text-[10px] text-purple-600 font-medium">
+                    Open Live Voice Assistant →
+                  </span>
+                </div>
+              </button>
             </div>
 
             {/* Start Sharing Button matching screenshot */}
@@ -342,7 +441,7 @@ export const LiveScreenAnalysis: React.FC<LiveScreenAnalysisProps> = ({
             {/* Live Ask Box during sharing */}
             <div className="w-full pt-2 flex items-center gap-2">
               <button
-                onClick={() => setIsMicActive(!isMicActive)}
+                onClick={handleToggleLiveMic}
                 className={`p-2.5 rounded-full border cursor-pointer transition-colors ${
                   isMicActive
                     ? 'bg-red-50 border-red-300 text-red-600 animate-pulse'

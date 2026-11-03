@@ -11,10 +11,12 @@ import {
   Cpu as ChipIcon,
   Cog,
   MessageSquare,
-  MonitorPlay
+  MonitorPlay,
+  RefreshCw
 } from 'lucide-react';
 import { QFixLogo } from '../common/QFixLogo.tsx';
 import { FullScanModal } from './FullScanModal.tsx';
+import { DeviceSwitcherModal } from './DeviceSwitcherModal.tsx';
 import { AppTab, DeviceInfo } from '../../types/index.ts';
 
 interface HomeDashboardProps {
@@ -23,6 +25,7 @@ interface HomeDashboardProps {
   conditionLabel: string;
   onNavigate: (tab: AppTab) => void;
   onOpenNotifications: () => void;
+  onUpdateDevice?: (device: DeviceInfo) => void;
   isDark?: boolean;
 }
 
@@ -32,9 +35,11 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
   conditionLabel = 'Good',
   onNavigate,
   onOpenNotifications,
+  onUpdateDevice,
   isDark = false
 }) => {
   const [isScanning, setIsScanning] = useState(false);
+  const [isSwitcherOpen, setIsSwitcherOpen] = useState(false);
 
   // SVG Circular progress math for Health Score
   const radius = 34;
@@ -78,18 +83,33 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
       >
         <div className="flex items-center justify-between pb-3.5 border-b border-slate-100 dark:border-slate-700/50">
           <div className="flex items-center gap-3">
-            {/* Phone Silhouette Frame with glow */}
-            <div className="w-12 h-14 rounded-2xl bg-gradient-to-tr from-blue-100/80 via-purple-100/50 to-indigo-100/80 dark:from-blue-900/40 dark:to-purple-900/40 border border-blue-200/50 dark:border-blue-700/40 flex items-center justify-center p-1 relative shadow-inner">
+            {/* Phone Silhouette Frame with glow - clickable */}
+            <button
+              onClick={() => setIsSwitcherOpen(true)}
+              title="Click to detect or switch phone model"
+              className="w-12 h-14 rounded-2xl bg-gradient-to-tr from-blue-100/80 via-purple-100/50 to-indigo-100/80 dark:from-blue-900/40 dark:to-purple-900/40 border border-blue-200/50 dark:border-blue-700/40 flex items-center justify-center p-1 relative shadow-inner cursor-pointer hover:scale-105 transition-transform"
+            >
               <Smartphone className="w-6 h-6 text-blue-600 dark:text-blue-400 stroke-[1.8]" />
-            </div>
+            </button>
 
             <div>
-              <h2 className="text-base font-bold text-slate-900 dark:text-white leading-tight">
-                {deviceInfo.model}
-              </h2>
-              <div className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800/60 text-emerald-600 dark:text-emerald-400 text-[11px] font-semibold">
-                <CheckCircle2 className="w-3 h-3 stroke-[2.5]" />
-                <span>Good Condition</span>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-bold text-slate-900 dark:text-white leading-tight">
+                  {deviceInfo.model}
+                </h2>
+              </div>
+              <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800/60 text-emerald-600 dark:text-emerald-400 text-[11px] font-semibold">
+                  <CheckCircle2 className="w-3 h-3 stroke-[2.5]" />
+                  <span>Good Condition</span>
+                </div>
+                <button
+                  onClick={() => setIsSwitcherOpen(true)}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 text-[10px] font-bold hover:bg-blue-100 transition-colors cursor-pointer"
+                >
+                  <RefreshCw className="w-2.5 h-2.5" />
+                  <span>Switch / Detect Phone</span>
+                </button>
               </div>
             </div>
           </div>
@@ -129,10 +149,11 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
       {/* Phone Health Score Card */}
       <section
         aria-label="Phone Health Score"
-        className={`w-full rounded-3xl p-4 border flex items-center gap-4 transition-all ${
+        onClick={() => onNavigate('reports')}
+        className={`w-full rounded-3xl p-4 border flex items-center gap-4 transition-all cursor-pointer hover:shadow-md ${
           isDark
-            ? 'bg-slate-800/80 border-slate-700/60 shadow-lg'
-            : 'bg-white border-slate-100/90 shadow-[0_4px_24px_rgba(0,0,0,0.03)]'
+            ? 'bg-slate-800/80 border-slate-700/60 shadow-lg hover:bg-slate-800'
+            : 'bg-white border-slate-100/90 shadow-[0_4px_24px_rgba(0,0,0,0.03)] hover:border-blue-100'
         }`}
       >
         {/* Circular Progress Gauge matching screenshot */}
@@ -295,6 +316,17 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
         onComplete={() => {
           setIsScanning(false);
           onNavigate('reports');
+        }}
+        isDark={isDark}
+      />
+
+      {/* Device Switcher & Live Auto-Detect Modal */}
+      <DeviceSwitcherModal
+        isOpen={isSwitcherOpen}
+        onClose={() => setIsSwitcherOpen(false)}
+        currentDevice={deviceInfo}
+        onSelectDevice={(newDev) => {
+          if (onUpdateDevice) onUpdateDevice(newDev);
         }}
         isDark={isDark}
       />

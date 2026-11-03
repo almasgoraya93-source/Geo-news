@@ -16,7 +16,8 @@ import {
   X,
   Loader2,
   Wrench,
-  AlertTriangle
+  AlertTriangle,
+  Image as ImageIcon
 } from 'lucide-react';
 import { QFixLogo } from '../common/QFixLogo.tsx';
 import { AttachmentModal } from './AttachmentModal.tsx';
@@ -24,6 +25,7 @@ import { CameraModal } from './CameraModal.tsx';
 import { ChatMessage, AppTab, Language } from '../../types/index.ts';
 
 interface AIChatBoardProps {
+  deviceInfo?: any;
   onBack: () => void;
   onNavigate: (tab: AppTab) => void;
   onOpenNotifications: () => void;
@@ -34,6 +36,7 @@ interface AIChatBoardProps {
 const CRACKED_SCREEN_SAMPLE = 'https://images.unsplash.com/photo-1598327105666-5b89351aff97?auto=format&fit=crop&w=600&q=80';
 
 export const AIChatBoard: React.FC<AIChatBoardProps> = ({
+  deviceInfo,
   onBack,
   onNavigate,
   onOpenNotifications,
@@ -80,6 +83,9 @@ Solution:
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [speakingId, setSpeakingId] = useState<string | null>(null);
 
+  // Pending attachment before sending
+  const [pendingAttachment, setPendingAttachment] = useState<{ url: string; name: string } | null>(null);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
 
@@ -89,7 +95,7 @@ Solution:
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, isLoading]);
+  }, [messages, isLoading, pendingAttachment]);
 
   // Speech Recognition setup
   useEffect(() => {
@@ -97,13 +103,17 @@ Solution:
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       const rec = new SpeechRecognition();
       rec.continuous = false;
-      rec.interimResults = false;
-      rec.lang = language === 'ur' ? 'ur-PK' : language === 'hi' ? 'hi-IN' : 'en-US';
+      rec.interimResults = true;
+      rec.lang = language === 'pa' ? 'pa-PK' : language === 'ur' ? 'ur-PK' : language === 'hi' ? 'hi-IN' : 'en-US';
 
       rec.onresult = (event: any) => {
-        const transcript = event.results[0][0].transcript;
-        setInputText((prev) => (prev ? `${prev} ${transcript}` : transcript));
-        setIsListening(false);
+        let full = '';
+        for (let i = 0; i < event.results.length; i++) {
+          full += event.results[i][0].transcript;
+        }
+        if (full.trim()) {
+          setInputText(full.trim());
+        }
       };
 
       rec.onerror = () => {
@@ -120,21 +130,35 @@ Solution:
 
   const toggleVoiceInput = () => {
     if (isListening) {
-      recognitionRef.current?.stop();
+      try {
+        recognitionRef.current?.stop();
+      } catch {}
       setIsListening(false);
     } else {
-      try {
-        recognitionRef.current?.start();
-        setIsListening(true);
-      } catch (err) {
-        console.warn('SpeechRecognition error:', err);
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.start();
+          setIsListening(true);
+        } catch (err) {
+          console.warn('SpeechRecognition error:', err);
+          onNavigate('voice');
+        }
+      } else {
+        onNavigate('voice');
       }
     }
   };
 
-  const handleSend = async (customText?: string, attachmentData?: { url: string; name: string }) => {
-    const textToSend = customText !== undefined ? customText : inputText;
-    if (!textToSend.trim() && !attachmentData) return;
+  const handleSend = async (customText?: string, explicitAttachment?: { url: string; name: string }) => {
+    const attachToSend = explicitAttachment || pendingAttachment;
+    let textToSend = customText !== undefined ? customText : inputText;
+
+    // If only attachment exists without text, provide a sensible default prompt
+    if (!textToSend.trim() && attachToSend) {
+      textToSend = 'Is screenshot ka masla check karein, kya yeh theek ho sakta hai?';
+    }
+
+    if (!textToSend.trim() && !attachToSend) return;
 
     const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const userMsgId = 'user-' + Date.now();
@@ -144,17 +168,18 @@ Solution:
       sender: 'user',
       text: textToSend,
       timestamp: timeStr,
-      attachment: attachmentData
+      attachment: attachToSend
         ? {
             type: 'image',
-            url: attachmentData.url,
-            name: attachmentData.name
+            url: attachToSend.url,
+            name: attachToSend.name
           }
         : undefined
     };
 
     setMessages((prev) => [...prev, newMsg]);
     setInputText('');
+    setPendingAttachment(null);
     setIsLoading(true);
 
     try {
@@ -163,8 +188,10 @@ Solution:
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: textToSend,
-          image: attachmentData?.url,
-          language
+          image: attachToSend?.url,
+          language,
+          deviceModel: deviceInfo?.model || 'Tecno One (Spark 20)',
+          manufacturer: deviceInfo?.manufacturer || 'Tecno Mobile'
         })
       });
 
@@ -186,7 +213,6 @@ Solution:
       ]);
     } catch (err) {
       console.error('Chat error:', err);
-      // Fallback
       setMessages((prev) => [
         ...prev,
         {
@@ -217,10 +243,10 @@ Solution:
     }
 
     window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 0.95;
+    const clean = text.replace(/[#*•_\-`]/g, ' ').replace(/\n+/g, '. ');
+    const utterance = new SpeechSynthesisUtterance(clean);
+    utterance.rate = 1.0;
 
-    // Pick Urdu/Hindi or English voice if available
     const voices = window.speechSynthesis.getVoices();
     const urVoice = voices.find((v) => v.lang.includes('ur') || v.lang.includes('hi'));
     if (urVoice) utterance.voice = urVoice;
@@ -247,12 +273,13 @@ Solution:
     );
   };
 
-  // Sample screenshot cracked screen demo (matching Screen 6 from reference!)
+  // Sample screenshot cracked screen demo (matching Screen 6 from reference)
   const triggerCrackedScreenSample = () => {
-    handleSend('Ye dekho meri screen ka ye masla hai, kya yeh theek ho sakta hai?', {
+    setPendingAttachment({
       url: CRACKED_SCREEN_SAMPLE,
       name: 'broken_screen_photo.jpg'
     });
+    setInputText('Ye dekho meri screen ka ye masla hai, kya yeh theek ho sakta hai?');
   };
 
   return (
@@ -314,7 +341,7 @@ Solution:
 
           // AI Message Bubble
           return (
-            <div key={msg.id} className="flex items-start gap-2.5 pr-8">
+            <div key={msg.id} className="flex items-start gap-2.5 pr-6">
               {/* Q Logo Avatar */}
               <div className="shrink-0 mt-0.5">
                 <QFixLogo size={28} />
@@ -330,6 +357,21 @@ Solution:
                   } text-[13px] leading-relaxed whitespace-pre-line`}
                 >
                   {msg.text}
+
+                  {/* Options clickable pills */}
+                  {msg.options && msg.options.length > 0 && (
+                    <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-700/60 flex flex-wrap gap-1.5">
+                      {msg.options.map((opt, i) => (
+                        <button
+                          key={i}
+                          onClick={() => handleSend(opt)}
+                          className="text-[11px] px-2.5 py-1 rounded-full bg-blue-50 hover:bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 dark:hover:bg-blue-900 border border-blue-200 dark:border-blue-800 font-medium cursor-pointer transition-colors"
+                        >
+                          {opt}
+                        </button>
+                      ))}
+                    </div>
+                  )}
 
                   {/* Repair plan banner if flagged as hardware / severe */}
                   {msg.repairPlan && (
@@ -447,7 +489,7 @@ Solution:
               <span className="w-2 h-2 rounded-full bg-purple-500 animate-bounce [animation-delay:0.2s]"></span>
               <span className="w-2 h-2 rounded-full bg-indigo-500 animate-bounce [animation-delay:0.4s]"></span>
               <span className="text-[11px] text-slate-500 ml-1 font-medium">
-                Q Fix AI is diagnosing...
+                Q Fix AI is analyzing screenshot & diagnosing...
               </span>
             </div>
           </div>
@@ -456,20 +498,68 @@ Solution:
         <div ref={messagesEndRef} />
       </div>
 
+      {/* Floating Pending Screenshot / Image Attachment Card */}
+      {pendingAttachment && (
+        <div className="mx-4 mb-2 p-2.5 rounded-2xl bg-white dark:bg-slate-800 border border-blue-300 dark:border-blue-700 shadow-md flex items-center justify-between animate-in slide-in-from-bottom-2">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <img
+              src={pendingAttachment.url}
+              alt="Preview"
+              className="w-12 h-12 object-cover rounded-xl border border-slate-200 dark:border-slate-700 shrink-0"
+            />
+            <div className="min-w-0 text-left">
+              <span className="text-[11px] font-bold text-blue-600 dark:text-blue-400 block truncate">
+                Attached: {pendingAttachment.name}
+              </span>
+              <span className="text-[10px] text-slate-500 dark:text-slate-400 block">
+                Type your question or press Send to diagnose
+              </span>
+            </div>
+          </div>
+
+          <button
+            onClick={() => setPendingAttachment(null)}
+            className="p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 hover:text-red-500 cursor-pointer"
+            title="Remove attachment"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Quick Attachment Shortcuts / Sample Prompt Bar */}
       <div className="px-4 py-1.5 flex items-center gap-2 overflow-x-auto text-xs no-scrollbar">
-        <button
-          onClick={triggerCrackedScreenSample}
-          className="shrink-0 px-3 py-1 rounded-full bg-blue-50 dark:bg-slate-800 border border-blue-200 dark:border-slate-700 text-blue-600 dark:text-blue-400 font-semibold text-[11px] hover:bg-blue-100 cursor-pointer transition-colors"
-        >
-          📱 Test Cracked Screen Diagnosis
-        </button>
-        <button
-          onClick={() => handleSend('Mera phone bohot garam ho raha hai charge karte waqt')}
-          className="shrink-0 px-3 py-1 rounded-full bg-purple-50 dark:bg-slate-800 border border-purple-200 dark:border-slate-700 text-purple-600 dark:text-purple-400 font-semibold text-[11px] hover:bg-purple-100 cursor-pointer transition-colors"
-        >
-          🔥 Overheating & Battery Drain
-        </button>
+        {pendingAttachment ? (
+          <>
+            <button
+              onClick={() => handleSend('Kya ye screen theek ho sakti hai?')}
+              className="shrink-0 px-3 py-1 rounded-full bg-blue-50 dark:bg-slate-800 border border-blue-200 dark:border-slate-700 text-blue-600 dark:text-blue-400 font-semibold text-[11px] hover:bg-blue-100 cursor-pointer transition-colors"
+            >
+              ❓ Kya ye screen theek ho sakti hai?
+            </button>
+            <button
+              onClick={() => handleSend('Touch panel kaam karega ya poori display badalni padegi?')}
+              className="shrink-0 px-3 py-1 rounded-full bg-purple-50 dark:bg-slate-800 border border-purple-200 dark:border-slate-700 text-purple-600 dark:text-purple-400 font-semibold text-[11px] hover:bg-purple-100 cursor-pointer transition-colors"
+            >
+              📱 Touch panel kaam karega?
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              onClick={triggerCrackedScreenSample}
+              className="shrink-0 px-3 py-1 rounded-full bg-blue-50 dark:bg-slate-800 border border-blue-200 dark:border-slate-700 text-blue-600 dark:text-blue-400 font-semibold text-[11px] hover:bg-blue-100 cursor-pointer transition-colors"
+            >
+              📱 Test Cracked Screen Diagnosis
+            </button>
+            <button
+              onClick={() => handleSend('Mera phone bohot garam ho raha hai charge karte waqt')}
+              className="shrink-0 px-3 py-1 rounded-full bg-purple-50 dark:bg-slate-800 border border-purple-200 dark:border-slate-700 text-purple-600 dark:text-purple-400 font-semibold text-[11px] hover:bg-purple-100 cursor-pointer transition-colors"
+            >
+              🔥 Overheating & Battery Drain
+            </button>
+          </>
+        )}
       </div>
 
       {/* Bottom Message Input Bar matching screenshot */}
@@ -493,7 +583,11 @@ Solution:
             onKeyDown={(e) => {
               if (e.key === 'Enter') handleSend();
             }}
-            placeholder="Type a message..."
+            placeholder={
+              pendingAttachment
+                ? 'Ask any question about this screenshot...'
+                : 'Type a message...'
+            }
             className="flex-1 bg-transparent border-none outline-hidden text-sm text-slate-800 dark:text-slate-100 placeholder:text-slate-400"
           />
 
@@ -514,7 +608,7 @@ Solution:
         <button
           type="button"
           onClick={() => handleSend()}
-          disabled={!inputText.trim() && !isLoading}
+          disabled={(!inputText.trim() && !pendingAttachment) || isLoading}
           aria-label="Send Message"
           className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center shadow-md hover:opacity-95 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
         >
@@ -526,9 +620,16 @@ Solution:
       <AttachmentModal
         isOpen={isAttachmentOpen}
         onClose={() => setIsAttachmentOpen(false)}
-        onSelectImage={(url, name) => handleSend('Is tasveer ka masla diagnose karein', { url, name })}
+        onSelectImage={(url, name) => {
+          setPendingAttachment({ url, name });
+        }}
         onTakePhoto={() => setIsCameraOpen(true)}
-        onUploadScreenshot={triggerCrackedScreenSample}
+        onUploadScreenshot={(url, name) => {
+          setPendingAttachment({
+            url: url || CRACKED_SCREEN_SAMPLE,
+            name: name || 'screenshot_capture.jpg'
+          });
+        }}
         onUploadFile={(name) => handleSend(`System diagnostic log file attached: ${name}`)}
         onShareScreen={() => onNavigate('live')}
         onStartVoice={() => onNavigate('voice')}
@@ -539,7 +640,9 @@ Solution:
       <CameraModal
         isOpen={isCameraOpen}
         onClose={() => setIsCameraOpen(false)}
-        onCapture={(base64) => handleSend('Check my camera capture and diagnostic status', { url: base64, name: 'camera_snap.jpg' })}
+        onCapture={(base64) => {
+          setPendingAttachment({ url: base64, name: 'camera_capture.jpg' });
+        }}
         isDark={isDark}
       />
     </div>
